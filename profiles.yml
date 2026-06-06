@@ -1,0 +1,13 @@
+kento_agent_sim:
+  outputs:
+    dev:
+      type: snowflake
+      account: DSYGTYZ-RC69618
+      user: jainam13
+      password: Iownit12345@@@
+      role: ACCOUNTADMIN # Or a specific hive_sim_role
+      database: KENTO_ENTERPRISE_DW
+      warehouse: KENTO_AGENT_RUNTIME_WH
+      schema: MATURED_SEMANTIC_LAYER
+      threads: 4
+  target: dev

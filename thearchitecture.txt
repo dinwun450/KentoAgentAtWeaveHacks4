@@ -1,0 +1,71 @@
+┌─────────────────────────────────────────────────────────────┐
+│              CopilotKit Real-Time Dashboard                 │
+│  Map View · Survivor View · Dispatch Controls · Overrides   │
+└────────────────────────────▲────────────────────────────────┘
+                             │
+                             │ Generative UI / Actions
+                             ▼
+┌─────────────────────────────────────────────────────────────┐
+│       LlamaIndex Workflow Multi-Agent Orchestration Fabric  │
+│                                                             │
+│  TriageAgent                                                 │
+│  RoutePlanningAgent                                          │
+│  RescueDispatchAgent                                         │
+│  EscalationAgent                                             │
+└────────────────────────────▲────────────────────────────────┘
+                             │
+                             │ Session Traces
+                             ▼
+┌─────────────────────────────────────────────────────────────┐
+│             W&B Weave Guardrails & Evaluations              │
+│                                                             │
+│  Routing Validation                                          │
+│  Resource Validation                                         │
+│  Mission Scoring                                             │
+└────────────────────────────▲────────────────────────────────┘
+                             │
+                             │ Context / Tool Use
+                             ▼
+┌─────────────────────────────────────────────────────────────┐
+│                 Redis Iris Hot Working Memory               │
+│                                                             │
+│  grid:node:x:y                                               │
+│  live:survivor:id                                            │
+│  agent:task:id                                               │
+│  mission:state:id                                            │
+└────────────────────────────▲────────────────────────────────┘
+                             │
+                             │ Matured Semantic Layer
+                             ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    dbt Labs Transformations                 │
+│                                                             │
+│  mart_city_grid_nodes                                        │
+│  mart_survivor_targets                                       │
+│  mart_route_priorities                                       │
+└────────────────────────────▲────────────────────────────────┘
+                             │
+                             │ Scheduled Runs
+                             ▼
+┌─────────────────────────────────────────────────────────────┐
+│              Snowflake Enterprise Data Warehouse            │
+│                                                             │
+│  raw_map_nodes                                               │
+│  raw_survivor_reports                                        │
+│  raw_building_data                                           │
+│  raw_road_networks                                           │
+│  agent_mission_history                                       │
+│  agent_decision_logs                                         │
+└────────────────────────────▲────────────────────────────────┘
+                             │
+                             │ Initial Load
+                             ▼
+┌─────────────────────────────────────────────────────────────┐
+│                        Raw Map Data                         │
+│                                                             │
+│  City Grid                                                   │
+│  Buildings                                                   │
+│  Roads                                                       │
+│  Rubble Locations                                            │
+│  Survivor Locations                                          │
+└─────────────────────────────────────────────────────────────┘

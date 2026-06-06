@@ -5,7 +5,7 @@ offline_store:
     type: snowflake
     account: DSYGTYZ-RC69618
       user: jainam13
-      password: Iownit12345@@@
+      password: ${{ secrets.MY_PASSWORD }}
       role: ACCOUNTADMIN 
 online_store:
     type: redis

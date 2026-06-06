@@ -112,29 +112,32 @@ export default function Home() {
   useCopilotAction({
     name: "assignAgentTask",
     description:
-      "Assign a rescue agent a task and route them to a target cell on the grid.",
+      "Dispatch a rescue agent to a target cell. Use when the user asks to send, assign, or dispatch an agent to a survivor or location. Survivors are at cells 31 and 84.",
     parameters: [
       {
         name: "agentId",
         type: "string",
-        description: 'Agent ID: "A", "B", or "C"',
+        description: 'Agent ID: "A" (cell 22), "B" (cell 55), or "C" (cell 78)',
         required: true,
       },
       {
         name: "targetCell",
         type: "number",
-        description: "Destination grid cell index (0-99)",
+        description:
+          "Destination grid cell (0-99). Survivor 1 is at cell 31, Survivor 2 is at cell 84.",
         required: true,
       },
       {
         name: "task",
         type: "string",
-        description: "Task description for the agent",
+        description: 'Task label, e.g. "rescue survivor"',
         required: true,
       },
     ],
     handler: ({ agentId, targetCell, task }) => {
       const cell = Number(targetCell);
+      const normalizedTask = task.trim().toLowerCase();
+
       if (!agents.some((agent) => agent.id === agentId)) return;
 
       setSelectedAgentId(agentId);
@@ -145,9 +148,9 @@ export default function Home() {
             : agent,
         ),
       );
-      setMissionLog((prev) => [
-        `Copilot assigned Agent ${agentId} to ${task} at cell ${cell}`,
-        ...prev,
+      setMissionLog((log) => [
+        `Copilot assigned Agent ${agentId} to ${normalizedTask} at cell ${cell}`,
+        ...log,
       ]);
     },
   });

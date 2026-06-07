@@ -1,0 +1,12 @@
+project: kento_hive_simulator
+registry: data/registry.db
+provider: snowflake
+offline_store:
+    type: snowflake
+    account: DSYGTYZ-RC69618
+      user: jainam13
+      password: ${{ secrets.MY_PASSWORD }}
+      role: ACCOUNTADMIN 
+online_store:
+    type: redis
+    connection_string: "redis://localhost:6379" # Points to Redis Iris Hot Memory

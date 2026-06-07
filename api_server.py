@@ -11,6 +11,7 @@ from agents.autonomous_hive import (
     run_autonomous_hive_until_complete,
     run_autonomous_tick,
 )
+from agents.agent_spawner import ensure_default_agents, spawn_agents
 from agents.coordinator import assign_best_agent
 from agents.hive_orchestrator import HiveOrchestrator
 from agents.movement_simulator import assign_agent_to_survivor
@@ -24,7 +25,10 @@ from memory.redis_iris import (
     redis_client,
 )
 
-weave.init("kento-agent-hive")
+import os
+
+if os.getenv("DISABLE_WEAVE", "").lower() not in ("1", "true", "yes"):
+    weave.init("kento-agent-hive")
 
 app = FastAPI()
 
@@ -49,6 +53,10 @@ class AutonomousHiveRunRequest(BaseModel):
 
 class SpawnSurvivorsRequest(BaseModel):
     count: int
+
+
+class SpawnAgentsRequest(BaseModel):
+    agent_ids: list[str] | None = None
 
 
 app.add_middleware(
@@ -130,27 +138,33 @@ def _get_mission_logs_from_redis():
 def grid_state():
     cells = []
 
-    for y in range(GRID_SIZE_Y):
-        for x in range(GRID_SIZE_X):
-            node = get_grid_node(x, y)
-            symbol = "."
+    # Batch all grid-node reads into a single Redis pipeline round-trip.
+    # (100 individual hgetall calls over Redis Cloud took ~13s; this is ~1.)
+    coords = [(x, y) for y in range(GRID_SIZE_Y) for x in range(GRID_SIZE_X)]
+    pipe = redis_client.pipeline()
+    for x, y in coords:
+        pipe.hgetall(f"grid:node:{x}:{y}")
+    nodes = pipe.execute()
 
-            if node:
-                node_type = node.get("type")
-                if node_type == "rubble":
-                    symbol = "█"
-                elif node_type == "survivor_visible":
-                    symbol = "V"
-                elif node_type == "survivor_trapped":
-                    symbol = "T"
+    for (x, y), node in zip(coords, nodes):
+        symbol = "."
 
-            cells.append({
-                "x": x,
-                "y": y,
-                "cell": y * GRID_SIZE_X + x,
-                "symbol": symbol,
-                "node": node,
-            })
+        if node:
+            node_type = node.get("type")
+            if node_type == "rubble":
+                symbol = "█"
+            elif node_type == "survivor_visible":
+                symbol = "V"
+            elif node_type == "survivor_trapped":
+                symbol = "T"
+
+        cells.append({
+            "x": x,
+            "y": y,
+            "cell": y * GRID_SIZE_X + x,
+            "symbol": symbol,
+            "node": node,
+        })
 
     return {
         "width": GRID_SIZE_X,
@@ -212,6 +226,17 @@ def spawn_survivors(request: SpawnSurvivorsRequest):
 
     result = spawn_random_survivors(request.count)
     _log_mission_event("api_random_survivors_spawned", result)
+
+    return {
+        "result": result,
+        "grid_state": grid_state(),
+    }
+
+
+@app.post("/spawn-agents")
+def spawn_agents_endpoint(request: SpawnAgentsRequest):
+    result = spawn_agents(request.agent_ids)
+    _log_mission_event("api_rescue_agents_spawned", {"count": len(result["spawned"])})
 
     return {
         "result": result,
@@ -313,3 +338,10 @@ async def run_hive_dispatch(request: HiveDispatchRequest):
         "survivor_id": survivor_id,
         "result": result,
     }
+
+
+# Seed default rescue agents (A, B, C) on startup so they appear on the grid.
+try:
+    ensure_default_agents()
+except Exception as exc:  # don't block API startup if Redis is briefly unavailable
+    print(f"[api_server] agent seeding skipped: {exc}")

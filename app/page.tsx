@@ -159,6 +159,10 @@ function AgentStatusCard({ result }: { result?: AgentStatusActionResult }) {
 
 
 export default function Home() {
+  // The CopilotKit chat needs an LLM-backed agent (OPENAI_API_KEY). Only mount
+  // the sidebar when explicitly enabled, so the data dashboard still renders
+  // when no LLM key is configured (otherwise useAgent throws and crashes the page).
+  const COPILOT_ENABLED = process.env.NEXT_PUBLIC_COPILOT_ENABLED === "true";
   const [agents, setAgents] = useState<Agent[]>([]);
   const [survivors, setSurvivors] = useState<Survivor[]>([]);
   const [gridCells, setGridCells] = useState<GridCell[]>([]);
@@ -578,17 +582,8 @@ export default function Home() {
     return base + "border-zinc-800 bg-zinc-950 text-zinc-600";
   }
 
-  return (
-    <CopilotSidebar
-      defaultOpen
-      clickOutsideToClose={false}
-      labels={{
-        title: "Rescue Copilot",
-        initial:
-          "Mission Command online. I can inspect Redis Iris grid cells, highlight agents, assign tasks, and route rescuers.",
-      }}
-    >
-      <main className="h-screen w-screen flex bg-zinc-950 text-zinc-100">
+  const content = (
+    <main className="h-screen w-screen flex bg-zinc-950 text-zinc-100">
         <section className="flex-1 p-6 border-r border-zinc-800 flex flex-col min-w-0">
           <div className="mb-4 flex items-start justify-between gap-4">
             <div>
@@ -762,7 +757,24 @@ export default function Home() {
             </ul>
           </div>
         </aside>
-      </main>
+    </main>
+  );
+
+  if (!COPILOT_ENABLED) {
+    return content;
+  }
+
+  return (
+    <CopilotSidebar
+      defaultOpen
+      clickOutsideToClose={false}
+      labels={{
+        title: "Rescue Copilot",
+        initial:
+          "Mission Command online. I can inspect Redis Iris grid cells, highlight agents, assign tasks, and route rescuers.",
+      }}
+    >
+      {content}
     </CopilotSidebar>
   );
 }

@@ -1,0 +1,5 @@
+survivor_id,x,y,map_symbol,status,injury_severity,air_supply,visibility,recommended_initial_response,source
+Survivor-V1,3,4,V,injured_visible,moderate,,visible,medical_aerial_drone,seed_disaster_grid
+Survivor-V2,7,6,V,injured_visible,minor,,visible,medical_aerial_drone,seed_disaster_grid
+Survivor-T1,2,3,T,trapped_beneath,,low,not_visible,heavy_excavator_drone,seed_disaster_grid
+Survivor-T2,5,5,T,trapped_beneath,,stable,not_visible,heavy_excavator_drone,seed_disaster_grid

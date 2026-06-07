@@ -1,0 +1,7 @@
+rubble_id,x,y,severity,passable,associated_building_id,source
+RUB-001,2,3,critical,false,,seed_disaster_grid
+RUB-002,2,4,high,false,,seed_disaster_grid
+RUB-003,5,5,critical,false,B-B,seed_disaster_grid
+RUB-004,6,5,high,false,B-B,seed_disaster_grid
+RUB-005,7,5,high,false,,seed_disaster_grid
+RUB-006,8,2,high,false,B-C,seed_disaster_grid

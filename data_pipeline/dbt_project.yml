@@ -1,0 +1,37 @@
+name: 'kento_hive_simulator'
+version: '1.0.0'
+config-version: 2
+
+# Connects to the 'kento_agent_sim' profile defined in profiles.yml
+profile: 'kento_agent_sim'
+
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+snapshot-paths: ["snapshots"]
+
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+# Ensure the raw database exists on every run (e.g. fresh dbt Cloud environments).
+on-run-start:
+  - "create database if not exists KENTO_DB"
+
+# Model layers:
+#   raw_generated -> Snowpark Python models that RANDOMLY regenerate the 5 raw
+#                    tables in KENTO_DB.RAW on every run (no seeds, no local step)
+#   staging       -> lightweight views over the raw tables
+#   marts         -> materialized tables (the "Matured Semantic Layer")
+models:
+  kento_hive_simulator:
+    raw_generated:
+      +materialized: table
+      +database: KENTO_DB
+      +schema: RAW
+    staging:
+      +materialized: view
+    marts:
+      +materialized: table

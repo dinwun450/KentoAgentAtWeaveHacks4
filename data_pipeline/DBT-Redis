@@ -1,0 +1,96 @@
+"""Standalone sync of the dbt mart `mart_city_grid_nodes` into Redis Iris.
+
+Reads all credentials from environment variables (or a local .env), so no
+secrets live in this file. Writes grid:node:<x>:<y> hashes in the shape that
+redis_iris.render_grid() and the agents expect (note the `type` field).
+
+Run (PowerShell example):
+    $env:SNOWFLAKE_PASSWORD="..."; $env:REDIS_CLOUD_HOST="..."; $env:REDIS_CLOUD_PORT="..."
+    $env:REDIS_CLOUD_PASSWORD="..."; python DBT-Redis
+
+For the full sync (grid + survivors + routes) use
+KentoAgentAtWeaveHacks4/snowflake_to_redis.py instead.
+"""
+
+import os
+import sys
+
+# A local file named redis.py at the repo root would shadow the installed `redis`
+# package. Drop this script's own directory from the import path so `import redis`
+# resolves to the library, not redis.py.
+_here = os.path.dirname(os.path.abspath(__file__))
+sys.path = [p for p in sys.path if os.path.abspath(p or ".") != _here]
+
+import redis
+import snowflake.connector
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# --- Redis Cloud connection (from env) ---
+r = redis.Redis(
+    host=os.getenv("REDIS_CLOUD_HOST", "localhost"),
+    port=int(os.getenv("REDIS_CLOUD_PORT", "6379")),
+    username=os.getenv("REDIS_CLOUD_USERNAME") or None,
+    password=os.getenv("REDIS_CLOUD_PASSWORD") or None,
+    ssl=os.getenv("REDIS_CLOUD_SSL", "false").lower() in ("1", "true", "yes"),
+    decode_responses=True,
+)
+
+# --- Snowflake connection (from env; non-secret values have defaults) ---
+conn = snowflake.connector.connect(
+    account=os.getenv("SNOWFLAKE_ACCOUNT", "DSYGTYZ-RC69618"),
+    user=os.getenv("SNOWFLAKE_USER", "jainam13"),
+    password=os.environ["SNOWFLAKE_PASSWORD"],          # required, no default
+    role=os.getenv("SNOWFLAKE_ROLE", "ACCOUNTADMIN"),
+    warehouse=os.getenv("SNOWFLAKE_WAREHOUSE", "KENTO_AGENT_RUNTIME_WH"),
+    database=os.getenv("SNOWFLAKE_DATABASE", "KENTO_ENTERPRISE_DW"),
+    schema=os.getenv("SNOWFLAKE_SCHEMA", "MATURED_SEMANTIC_LAYER"),
+)
+
+# render_grid() shows these node types; everything else renders as blank.
+SYMBOL = {
+    "survivor_trapped": "T",
+    "survivor_visible": "V",
+    "rubble": "█",
+}
+
+cur = conn.cursor()
+cur.execute("""
+    select
+        x,
+        y,
+        node_type,
+        passable,
+        has_rubble,
+        has_road,
+        has_building,
+        has_survivor,
+        survivor_id
+    from mart_city_grid_nodes
+""")
+
+pipe = r.pipeline()
+count = 0
+for x, y, node_type, passable, has_rubble, has_road, has_building, has_survivor, survivor_id in cur.fetchall():
+    mapping = {
+        "x": int(x),
+        "y": int(y),
+        "type": node_type,
+        "symbol": SYMBOL.get(node_type, "."),
+        "passable": str(bool(passable)).lower(),
+        "has_rubble": str(bool(has_rubble)).lower(),
+        "has_road": str(bool(has_road)).lower(),
+        "has_building": str(bool(has_building)).lower(),
+        "has_survivor": str(bool(has_survivor)).lower(),
+    }
+    if survivor_id:
+        mapping["id"] = survivor_id
+    pipe.hset(f"grid:node:{x}:{y}", mapping=mapping)
+    count += 1
+
+pipe.execute()
+cur.close()
+conn.close()
+
+print(f"Synced {count} rows from mart_city_grid_nodes to Redis Iris.")

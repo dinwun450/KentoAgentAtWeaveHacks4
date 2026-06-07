@@ -1,0 +1,13 @@
+building_id,building_name,x,y,structure_type,damage_state,occupancy_risk,source
+B-A,Northwest Apartments,1,1,residential,damaged,medium,seed_disaster_grid
+B-A,Northwest Apartments,1,2,residential,damaged,medium,seed_disaster_grid
+B-A,Northwest Apartments,2,1,residential,damaged,medium,seed_disaster_grid
+B-A,Northwest Apartments,2,2,residential,damaged,medium,seed_disaster_grid
+B-B,Central Clinic,5,4,medical,damaged,medium,seed_disaster_grid
+B-B,Central Clinic,6,4,medical,damaged,medium,seed_disaster_grid
+B-B,Central Clinic,5,5,medical,collapsed,high,seed_disaster_grid
+B-B,Central Clinic,6,5,medical,collapsed,high,seed_disaster_grid
+B-C,East Office Block,7,1,commercial,damaged,medium,seed_disaster_grid
+B-C,East Office Block,8,1,commercial,damaged,medium,seed_disaster_grid
+B-C,East Office Block,7,2,commercial,damaged,medium,seed_disaster_grid
+B-C,East Office Block,8,2,commercial,collapsed,high,seed_disaster_grid

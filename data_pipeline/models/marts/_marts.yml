@@ -1,0 +1,33 @@
+version: 2
+
+models:
+  - name: mart_city_grid_nodes
+    description: "One row per grid cell with derived node_type + passability. Hydrates Redis grid:node:x:y."
+    columns:
+      - name: node_key
+        description: "Surrogate key 'x-y'."
+        tests: [unique, not_null]
+      - name: node_type
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['clear', 'road', 'building', 'rubble', 'survivor_visible', 'survivor_trapped']
+
+  - name: mart_survivor_targets
+    description: "Survivors ranked by rescue priority (air supply first, then injury). Feeds TriageAgent / live:survivor:id."
+    columns:
+      - name: survivor_id
+        tests: [unique, not_null]
+      - name: priority_rank
+        tests: [unique, not_null]
+
+  - name: mart_route_priorities
+    description: "Road segments with blockage stats + clearance priority. Feeds RoutePlanningAgent."
+    columns:
+      - name: road_id
+        tests: [unique, not_null]
+      - name: clearance_priority
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['none', 'medium', 'high', 'critical']

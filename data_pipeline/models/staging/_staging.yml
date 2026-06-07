@@ -1,0 +1,16 @@
+version: 2
+
+models:
+  - name: stg_city_grid
+    description: "Cleaned city grid cells (one row per x/y)."
+    columns:
+      - name: x
+        tests: [not_null]
+      - name: y
+        tests: [not_null]
+
+  - name: stg_survivor_locations
+    description: "Cleaned survivor reports."
+    columns:
+      - name: survivor_id
+        tests: [unique, not_null]

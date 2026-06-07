@@ -4,6 +4,7 @@ from memory.redis_iris import GRID_SIZE_X, GRID_SIZE_Y
 
 SAFE_DISPATCH_ACTIONS = {
     "trapped_beneath": "heavy_excavator_drone",
+    "trapped": "heavy_excavator_drone",
     "injured_visible": "medical_aerial_drone",
 }
 
@@ -41,7 +42,7 @@ def reject_unsafe_dispatch_action(status: str, resource_type: str) -> str:
 @weave.op()
 async def evaluate_routing(survivor_id: str, x: int, y: int, status: str) -> str:
     """Evaluates tactical routing choices based on x, y coordinates."""
-    if status == "trapped_beneath":
+    if status in ("trapped_beneath", "trapped"):
         return (
             f"🚨 Dispatching Heavy Excavator Drone to coordinate Grid ({x}, {y}) "
             f"for buried target {survivor_id}."

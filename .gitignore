@@ -33,9 +33,20 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# local secrets / deploy notes (never commit)
+secrets.local.txt
+DEPLOY.md
+
 # vercel
 .vercel
 
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+api/

@@ -494,6 +494,21 @@ export default function Home() {
     ),
   });
 
+  useCopilotAction({
+    name: "runFieldAgents",
+    description:
+      "Run the autonomous field rescue agents (tactical observe-think-act loop: self-assign, reroute around rubble, rescue, request backup) until all survivors are rescued. Pauses the live data loop during the run.",
+    parameters: [],
+    handler: async () => {
+      const data = await callApiAndApplyGridState("/field-agents/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ max_ticks: 60 }),
+      });
+      return data.result;
+    },
+  });
+
   useCopilotReadable({
     description: "Compact rescue agent statuses from Redis",
     value: copilotAgents,
@@ -637,6 +652,41 @@ export default function Home() {
           <p className="mt-4 text-sm text-zinc-300">
             Selected Agent: {selectedAgentId ?? "None"}
           </p>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              onClick={() =>
+                callApiAndApplyGridState("/field-agents/run", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ max_ticks: 60 }),
+                }).catch(() => {})
+              }
+              className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-500"
+            >
+              Run Field Agents
+            </button>
+            <button
+              onClick={() =>
+                callApiAndApplyGridState("/field-agents/tick", { method: "POST" }).catch(() => {})
+              }
+              className="rounded-lg border border-zinc-600 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800"
+            >
+              Step
+            </button>
+            <button
+              onClick={() =>
+                callApiAndApplyGridState("/spawn-agents", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({}),
+                }).catch(() => {})
+              }
+              className="rounded-lg border border-zinc-600 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800"
+            >
+              Spawn Agents
+            </button>
+          </div>
 
           <div className="mt-6 rounded-xl border border-zinc-700 p-4">
             <p className="text-sm text-zinc-300">Mission Status</p>

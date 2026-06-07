@@ -6,10 +6,13 @@ import weave
 from llama_index.core.workflow import Event, StartEvent, StopEvent, Workflow, step
 
 from agents.coordinator import orchestrate_rescue_operations
-from agents.movement_simulator import move_all_agents
+from agents.field_agent import _live_survivors, run_field_agents_tick
 from agents.rescue_agent import dispatch_rescue
 from agents.route_agent import plan_route
 from memory.redis_iris import redis_client
+
+# Tactical tick budget the strategic commander oversees per run.
+MAX_TACTICAL_TICKS = 80
 
 
 class CoordinatorEvent(Event):
@@ -43,7 +46,6 @@ def _survivors_by_id(summary: dict[str, Any]) -> dict[str, dict[str, Any]]:
 class HiveOrchestrator(Workflow):
 
     @step
-    @weave.op()
     async def coordinate(self, ev: StartEvent) -> CoordinatorEvent:
         summary = orchestrate_rescue_operations()
         _log_mission_event("coordination_completed", summary)
@@ -51,7 +53,6 @@ class HiveOrchestrator(Workflow):
         return CoordinatorEvent(summary=summary)
 
     @step
-    @weave.op()
     async def route_planning(self, ev: CoordinatorEvent) -> RoutePlanEvent:
         survivors_by_id = _survivors_by_id(ev.summary)
         route_plans = []
@@ -99,7 +100,6 @@ class HiveOrchestrator(Workflow):
         return RoutePlanEvent(summary=summary)
 
     @step
-    @weave.op()
     async def dispatch_resource(self, ev: RoutePlanEvent) -> RescueDispatchEvent:
         dispatches = []
         dispatch_errors = []
@@ -142,12 +142,26 @@ class HiveOrchestrator(Workflow):
         return RescueDispatchEvent(summary=summary)
 
     @step
-    @weave.op()
     async def start_movement(self, ev: RescueDispatchEvent) -> StopEvent:
-        moved_agents = move_all_agents()
+        # TACTICAL EXECUTION: the strategic commander (coordinate -> route ->
+        # dispatch) hands off to the agentic field agents. They observe -> think
+        # -> act -> report: rerouting around rubble, rescuing, and calling for
+        # backup until every survivor is rescued (or the tactical budget is spent).
+        def active() -> int:
+            return sum(1 for s in _live_survivors().values() if s.get("status") != "rescued")
+
+        ticks = 0
+        for _ in range(MAX_TACTICAL_TICKS):
+            if active() == 0:
+                break
+            run_field_agents_tick()
+            ticks += 1
+
         summary = {
             **ev.summary,
-            "moved_agents": moved_agents,
+            "tactical_ticks": ticks,
+            "active_survivors_remaining": active(),
+            "complete": active() == 0,
         }
         _log_mission_event("movement_tick_completed", summary)
 

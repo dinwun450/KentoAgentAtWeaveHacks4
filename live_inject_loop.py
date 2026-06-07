@@ -3,7 +3,8 @@
 Every N seconds (default 10), read the latest Snowflake marts and push them into
 Redis Cloud so the CopilotKit dashboard (which polls /grid-state every 2s)
 updates in near-real-time. dbt Cloud regenerates the Snowpark marts every minute;
-this loop reflects the latest snapshot into Redis every 10s.
+this loop reflects the latest snapshot into Redis every 100s (slow enough that
+field agents can fully rescue a scenario before it refreshes).
 
 Agents (agent:*) are preserved — only grid/survivor/route keys are refreshed.
 
@@ -23,7 +24,7 @@ load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
 import snowflake.connector
 from memory.redis_iris import redis_client
 
-INTERVAL = float(sys.argv[1]) if len(sys.argv) > 1 else 10.0
+INTERVAL = float(sys.argv[1]) if len(sys.argv) > 1 else 100.0
 DB = os.getenv("SNOWFLAKE_DATABASE", "KENTO_DB")
 SCHEMA = os.getenv("SNOWFLAKE_SCHEMA", "DBT_KENTO")
 
@@ -140,17 +141,22 @@ def main():
             start = time.time()
             now = datetime.now().strftime("%H:%M:%S")
             try:
-                fp = fingerprint(cur)
-                if fp == last_fp:
-                    redis_client.hset(
-                        "pipeline:last_sync", "last_check_utc",
-                        datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                    )
-                    print(f"[{now}] unchanged - skip", flush=True)
+                if str(redis_client.get("sim:paused") or "").lower() in ("1", "true", "yes"):
+                    # Simulation mode: the field agents own the survivor/grid keys.
+                    print(f"[{now}] paused (simulation mode) - skip", flush=True)
+                    last_fp = None  # force a resync when the loop resumes
                 else:
-                    g, s, rt = inject(cur)
-                    last_fp = fp
-                    print(f"[{now}] CHANGED -> synced grid={g} survivors={s} routes={rt}", flush=True)
+                    fp = fingerprint(cur)
+                    if fp == last_fp:
+                        redis_client.hset(
+                            "pipeline:last_sync", "last_check_utc",
+                            datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                        )
+                        print(f"[{now}] unchanged - skip", flush=True)
+                    else:
+                        g, s, rt = inject(cur)
+                        last_fp = fp
+                        print(f"[{now}] CHANGED -> synced grid={g} survivors={s} routes={rt}", flush=True)
             except Exception as exc:
                 print(f"[{now}] error: {exc} (reconnecting)", flush=True)
                 last_fp = None

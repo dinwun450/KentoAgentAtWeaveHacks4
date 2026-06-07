@@ -1,4 +1,5 @@
 import json
+import threading
 import time
 
 import weave
@@ -13,6 +14,7 @@ from agents.autonomous_hive import (
 )
 from agents.agent_spawner import ensure_default_agents, spawn_agents
 from agents.coordinator import assign_best_agent
+from agents.field_agent import run_field_agents_tick
 from agents.hive_orchestrator import HiveOrchestrator
 from agents.movement_simulator import assign_agent_to_survivor
 from agents.survivor_spawner import spawn_random_survivors
@@ -57,6 +59,50 @@ class SpawnSurvivorsRequest(BaseModel):
 
 class SpawnAgentsRequest(BaseModel):
     agent_ids: list[str] | None = None
+
+
+class SimulationModeRequest(BaseModel):
+    paused: bool
+
+
+class FieldAgentsRunRequest(BaseModel):
+    max_ticks: int = 60
+
+
+SIM_PAUSED_KEY = "sim:paused"
+
+# Background field-agent run state. With LLM thinking enabled each tick costs an
+# OpenAI round-trip (~4s for 3 agents), so a full rescue is tens of seconds. We run
+# it off-request in a daemon thread and let the dashboard's 2s /grid-state polling
+# animate the rescue, instead of blocking the HTTP request for the whole run.
+_field_run = {"running": False, "ticks": 0, "complete": False, "started_at": 0.0}
+_field_run_lock = threading.Lock()
+
+
+def _field_agents_run_worker(max_ticks: int) -> None:
+    redis_client.set(SIM_PAUSED_KEY, "1")
+    ticks = 0
+    try:
+        for _ in range(max_ticks):
+            run_field_agents_tick()
+            ticks += 1
+            _field_run["ticks"] = ticks
+            if _active_survivor_count() == 0:
+                break
+    finally:
+        complete = _active_survivor_count() == 0
+        _field_run["complete"] = complete
+        _field_run["running"] = False
+        redis_client.set(SIM_PAUSED_KEY, "0")
+        _log_mission_event(
+            "api_field_agents_run_completed",
+            {"ticks_run": ticks, "complete": complete,
+             "active_survivors_remaining": _active_survivor_count()},
+        )
+
+
+def _active_survivor_count() -> int:
+    return sum(1 for s in _get_survivors_from_redis() if s.get("status") != "rescued")
 
 
 app.add_middleware(
@@ -179,8 +225,14 @@ def grid_state():
 
 @app.post("/orchestrate")
 async def orchestrate():
-    workflow = HiveOrchestrator(timeout=10)
-    result = await workflow.run()
+    # Pause the inject loop so the orchestrator's tactical field-agent execution
+    # isn't overwritten by re-injected Snowflake survivors; resume afterwards.
+    redis_client.set(SIM_PAUSED_KEY, "1")
+    try:
+        workflow = HiveOrchestrator(timeout=180)
+        result = await workflow.run()
+    finally:
+        redis_client.set(SIM_PAUSED_KEY, "0")
     _log_mission_event("api_orchestrate_completed", {"result": result})
 
     return {
@@ -241,6 +293,59 @@ def spawn_agents_endpoint(request: SpawnAgentsRequest):
     return {
         "result": result,
         "grid_state": grid_state(),
+    }
+
+
+@app.post("/simulation/mode")
+def simulation_mode(request: SimulationModeRequest):
+    # Pauses/resumes the external live_inject_loop (which honours this Redis flag),
+    # so field agents can own the survivor/grid keys without being overwritten.
+    redis_client.set(SIM_PAUSED_KEY, "1" if request.paused else "0")
+    _log_mission_event("api_simulation_mode", {"paused": request.paused})
+    return {"paused": request.paused, "grid_state": grid_state()}
+
+
+@app.post("/field-agents/tick")
+def field_agents_tick():
+    # One tactical observe-think-act-report cycle for every field agent.
+    results = run_field_agents_tick()
+    return {"results": results, "grid_state": grid_state()}
+
+
+@app.post("/field-agents/run")
+def field_agents_run(request: FieldAgentsRunRequest):
+    if request.max_ticks < 1:
+        raise HTTPException(status_code=400, detail="max_ticks must be at least 1")
+
+    # Kick off the rescue in a background thread and return immediately. The loop
+    # pauses the inject loop (so rescues aren't overwritten), runs the field agents
+    # to completion (or max_ticks), then resumes the loop. The dashboard polls
+    # /grid-state every 2s, so the rescue animates live without the button hanging.
+    with _field_run_lock:
+        if _field_run["running"]:
+            return {
+                "result": {"status": "already_running", "ticks_run": _field_run["ticks"]},
+                "grid_state": grid_state(),
+            }
+        _field_run.update(running=True, ticks=0, complete=False, started_at=time.time())
+        threading.Thread(
+            target=_field_agents_run_worker, args=(request.max_ticks,), daemon=True
+        ).start()
+
+    _log_mission_event("api_field_agents_run_started", {"max_ticks": request.max_ticks})
+    return {
+        "result": {"status": "started", "max_ticks": request.max_ticks},
+        "grid_state": grid_state(),
+    }
+
+
+@app.get("/field-agents/status")
+def field_agents_status():
+    return {
+        "running": _field_run["running"],
+        "ticks_run": _field_run["ticks"],
+        "complete": _field_run["complete"],
+        "active_survivors_remaining": _active_survivor_count(),
     }
 
 
@@ -331,12 +436,17 @@ async def run_hive_dispatch(request: HiveDispatchRequest):
     if not survivor_id:
         raise HTTPException(status_code=400, detail="survivor_id is required")
 
-    workflow = HiveOrchestrator(timeout=10)
-    result = await workflow.run()
+    redis_client.set(SIM_PAUSED_KEY, "1")
+    try:
+        workflow = HiveOrchestrator(timeout=180)
+        result = await workflow.run()
+    finally:
+        redis_client.set(SIM_PAUSED_KEY, "0")
 
     return {
         "survivor_id": survivor_id,
         "result": result,
+        "grid_state": grid_state(),
     }
 
 
